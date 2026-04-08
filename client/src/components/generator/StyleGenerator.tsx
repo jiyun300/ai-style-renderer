@@ -1,38 +1,53 @@
 import { useState } from "react";
-import { Wand2 } from "lucide-react";
+import { Wand2, Download } from "lucide-react";
 import ImageDropzone from "../shared/ImageDropzone";
 import ToggleSwitch from "../shared/ToggleSwitch";
 import CopyButton from "../shared/CopyButton";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import { generateStyledImage } from "../../services/api";
-import type { GenerationResult } from "../../types";
+import type { AnalysisResult, GenerationResult } from "../../types";
 
-export default function StyleGenerator() {
-  const [originalImage, setOriginalImage] = useState<File | null>(null);
-  const [styleImage, setStyleImage] = useState<File | null>(null);
+interface Props {
+  analysisResult: AnalysisResult | null;
+}
+
+export default function StyleGenerator({ analysisResult }: Props) {
+  const [originalImages, setOriginalImages] = useState<File[]>([]);
   const [fixMode, setFixMode] = useState(true);
   const [strength, setStrength] = useState(0.65);
-  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [results, setResults] = useState<GenerationResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
-    if (!originalImage || !styleImage) return;
+    if (originalImages.length === 0 || !analysisResult) return;
     setLoading(true);
     setError(null);
-    try {
-      const data = await generateStyledImage(
-        originalImage,
-        styleImage,
-        fixMode,
-        fixMode ? undefined : strength
-      );
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
-    } finally {
-      setLoading(false);
+    setResults([]);
+    setProgress({ current: 0, total: originalImages.length });
+
+    const newResults: GenerationResult[] = [];
+
+    for (let i = 0; i < originalImages.length; i++) {
+      setProgress({ current: i + 1, total: originalImages.length });
+      try {
+        const data = await generateStyledImage(
+          originalImages[i],
+          analysisResult.stylePrompt,
+          fixMode,
+          fixMode ? undefined : strength
+        );
+        newResults.push(data);
+        setResults([...newResults]);
+      } catch (err) {
+        setError(
+          `Image ${i + 1} failed: ${err instanceof Error ? err.message : "Generation failed"}`
+        );
+      }
     }
+
+    setLoading(false);
   };
 
   return (
@@ -42,29 +57,34 @@ export default function StyleGenerator() {
           Style Unifier
         </h2>
         <p className="mt-1 text-sm text-surface-500">
-          Apply a reference style to your original image
+          Apply a reference style to multiple images at once
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <p className="mb-2 text-xs font-medium text-surface-500">Original Image</p>
-          <ImageDropzone
-            label="Upload original"
-            onImageSelect={setOriginalImage}
-            currentImage={originalImage}
-            onClear={() => setOriginalImage(null)}
-          />
+      {analysisResult ? (
+        <div className="rounded-2xl border border-primary-200 bg-primary-50 p-4 space-y-2">
+          <p className="text-xs font-medium text-primary-600">Style Prompt from Analyzer</p>
+          <p className="text-sm text-primary-800 leading-relaxed">{analysisResult.stylePrompt}</p>
         </div>
-        <div>
-          <p className="mb-2 text-xs font-medium text-surface-500">Style Reference</p>
-          <ImageDropzone
-            label="Upload style reference"
-            onImageSelect={setStyleImage}
-            currentImage={styleImage}
-            onClear={() => setStyleImage(null)}
-          />
+      ) : (
+        <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4 text-center">
+          <p className="text-sm text-surface-500">
+            Go to Style Analyzer first to extract a style prompt
+          </p>
         </div>
+      )}
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-surface-500">
+          Images to transform ({originalImages.length})
+        </p>
+        <ImageDropzone
+          multiple
+          label="Upload images to transform"
+          onImagesSelect={setOriginalImages}
+          currentImages={originalImages}
+          onClear={() => setOriginalImages([])}
+        />
       </div>
 
       <div className="flex flex-col gap-4 rounded-2xl border border-surface-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,17 +113,19 @@ export default function StyleGenerator() {
 
       <button
         onClick={handleGenerate}
-        disabled={!originalImage || !styleImage || loading}
+        disabled={originalImages.length === 0 || !analysisResult || loading}
         className="w-full rounded-xl bg-primary-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <span className="inline-flex items-center gap-2">
           <Wand2 size={16} />
-          Generate
+          Generate{originalImages.length > 1 ? ` (${originalImages.length} images)` : ""}
         </span>
       </button>
 
       {loading && (
-        <LoadingSpinner message="Analyzing style & generating image... This may take 15-30 seconds" />
+        <LoadingSpinner
+          message={`Processing image ${progress.current} of ${progress.total}... This may take 15-30 seconds per image`}
+        />
       )}
 
       {error && (
@@ -112,24 +134,49 @@ export default function StyleGenerator() {
         </div>
       )}
 
-      {result && !loading && (
-        <div className="space-y-4 rounded-2xl border border-surface-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-surface-700">Result</h3>
-          <img
-            src={result.imageUrl}
-            alt="Generated"
-            className="w-full rounded-xl"
-          />
-
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-xs font-medium text-surface-400">
-              Style prompt used
-            </p>
-            <CopyButton text={result.stylePromptUsed} />
+      {results.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-surface-700">
+            Results ({results.length})
+          </h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {results.map((r, i) => (
+              <div
+                key={i}
+                className="rounded-2xl border border-surface-200 bg-white p-4 space-y-3"
+              >
+                <img
+                  src={r.imageUrl}
+                  alt={`Generated ${i + 1}`}
+                  className="w-full rounded-xl"
+                />
+                <a
+                  href={r.imageUrl}
+                  download={`styled-${i + 1}.png`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-600"
+                >
+                  <Download size={14} />
+                  Download
+                </a>
+              </div>
+            ))}
           </div>
-          <p className="rounded-xl bg-surface-50 p-3 text-xs leading-relaxed text-surface-600 text-left">
-            {result.stylePromptUsed}
-          </p>
+
+          {results[0] && (
+            <div className="rounded-2xl border border-surface-200 bg-white p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs font-medium text-surface-400">
+                  Style prompt used
+                </p>
+                <CopyButton text={results[0].stylePromptUsed} />
+              </div>
+              <p className="rounded-xl bg-surface-50 p-3 text-xs leading-relaxed text-surface-600 text-left">
+                {results[0].stylePromptUsed}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

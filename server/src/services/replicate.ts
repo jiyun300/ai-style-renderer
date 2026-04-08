@@ -1,6 +1,10 @@
-import Replicate from "replicate";
+import { InferenceClient } from "@huggingface/inference";
 
-const replicate = new Replicate();
+let client: InferenceClient;
+function getClient() {
+  if (!client) client = new InferenceClient(process.env.HF_API_TOKEN);
+  return client;
+}
 
 interface GenerateOptions {
   stylePrompt: string;
@@ -12,55 +16,28 @@ interface GenerateOptions {
 }
 
 export async function generateImage(options: GenerateOptions): Promise<string> {
-  const { stylePrompt, contentDescription, imageBase64, mediaType, fixMode, strength } = options;
-  const imageUri = `data:${mediaType};base64,${imageBase64}`;
-  const fullPrompt = `${contentDescription}, ${stylePrompt}`;
-  const negativePrompt = "blurry, low quality, distorted, deformed, watermark, text, ugly, duplicate, morbid";
+  const { stylePrompt, contentDescription } = options;
 
-  if (fixMode) {
-    // FIX ON: Use ControlNet-Canny for structural preservation
-    const output = await replicate.run(
-      "lucataco/sdxl-controlnet:db2ffdbdc7f6cb4d6dab512434679ee3366ae7ab84f89750f8947d5ad24761c9",
-      {
-        input: {
-          image: imageUri,
-          prompt: fullPrompt,
-          negative_prompt: negativePrompt,
-          condition_scale: 0.8,
-          guidance_scale: 7.5,
-          num_inference_steps: 30,
-          scheduler: "K_EULER_ANCESTRAL",
-        },
-      }
-    );
-    return extractUrl(output);
-  } else {
-    // FIX OFF: Use SDXL img2img for creative freedom
-    const output = await replicate.run(
-      "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
-      {
-        input: {
-          image: imageUri,
-          prompt: fullPrompt,
-          negative_prompt: negativePrompt,
-          prompt_strength: strength ?? 0.65,
-          num_inference_steps: 30,
-          guidance_scale: 7.5,
-          scheduler: "K_EULER_ANCESTRAL",
-        },
-      }
-    );
-    return extractUrl(output);
-  }
-}
+  // 콘텐츠 묘사 + 스타일 프롬프트를 결합하되, 콘텐츠를 우선
+  const fullPrompt = `${contentDescription}, rendered in ${stylePrompt}`;
 
-function extractUrl(output: unknown): string {
-  if (typeof output === "string") return output;
-  if (Array.isArray(output) && output.length > 0) {
-    const first = output[0];
-    if (typeof first === "string") return first;
-    if (typeof first === "object" && first !== null && "url" in first) return (first as { url: string }).url;
+  const hf = getClient();
+
+  const result = await hf.textToImage({
+    model: "stabilityai/stable-diffusion-xl-base-1.0",
+    inputs: fullPrompt,
+    parameters: {
+      negative_prompt: "blurry, low quality, distorted, deformed, watermark, text, ugly, different composition, different layout, different content",
+      guidance_scale: 9,
+      num_inference_steps: 35,
+    },
+  });
+
+  if (typeof result === "string") {
+    return result;
   }
-  if (output && typeof output === "object" && "url" in output) return (output as { url: string }).url;
-  throw new Error("Unexpected Replicate output format");
+  const blob = result as Blob;
+  const arrayBuffer = await blob.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return `data:image/png;base64,${base64}`;
 }

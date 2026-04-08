@@ -2,12 +2,22 @@ import { useState } from "react";
 import { Palette, Layers } from "lucide-react";
 import StyleAnalyzer from "./components/analyzer/StyleAnalyzer";
 import StyleGenerator from "./components/generator/StyleGenerator";
+import type { AnalysisResult } from "./types";
 import clsx from "clsx";
 
 type Tab = "analyzer" | "generator";
 
 function App() {
   const [tab, setTab] = useState<Tab>("analyzer");
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+
+  const handleStyleAnalyzed = (result: AnalysisResult) => {
+    setAnalysisResult(result);
+  };
+
+  const handleGoToUnifier = () => {
+    setTab("generator");
+  };
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -53,16 +63,21 @@ function App() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content - both rendered, hidden with CSS to preserve state */}
       <main className="mx-auto max-w-2xl px-4 py-6 pb-20">
-        {tab === "analyzer" ? <StyleAnalyzer /> : <StyleGenerator />}
+        <div className={tab === "analyzer" ? "" : "hidden"}>
+          <StyleAnalyzer onStyleAnalyzed={handleStyleAnalyzed} onGoToUnifier={handleGoToUnifier} />
+        </div>
+        <div className={tab === "generator" ? "" : "hidden"}>
+          <StyleGenerator analysisResult={analysisResult} />
+        </div>
       </main>
 
       {/* Footer */}
       <footer className="border-t border-surface-200 bg-white">
         <div className="mx-auto max-w-2xl px-4 py-4 text-center">
           <p className="text-xs text-surface-400">
-            Powered by Claude Vision & Stable Diffusion
+            Powered by Gemini Vision & Stable Diffusion
           </p>
         </div>
       </footer>

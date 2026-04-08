@@ -16,5 +16,4 @@ export interface GenerationResult {
   imageUrl: string;
   stylePromptUsed: string;
   contentDescription: string;
-  styleBreakdown: StyleBreakdown;
 }

@@ -5,17 +5,20 @@ import { analyzeStyle } from "../services/claude.js";
 const router = Router();
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
 
-router.post("/", upload.single("image"), async (req: Request, res: Response) => {
+router.post("/", upload.array("images", 10), async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
-      res.status(400).json({ error: "No image file provided" });
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: "No image files provided" });
       return;
     }
 
-    const imageBase64 = req.file.buffer.toString("base64");
-    const mediaType = req.file.mimetype;
+    const images = files.map((f) => ({
+      base64: f.buffer.toString("base64"),
+      mediaType: f.mimetype,
+    }));
 
-    const result = await analyzeStyle(imageBase64, mediaType);
+    const result = await analyzeStyle(images);
     res.json(result);
   } catch (error) {
     console.error("Analysis error:", error);

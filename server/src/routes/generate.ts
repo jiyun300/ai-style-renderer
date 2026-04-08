@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { analyzeStyle, describeContent } from "../services/claude.js";
+import { describeContent } from "../services/claude.js";
 import { generateImage } from "../services/replicate.js";
 
 const router = Router();
@@ -10,25 +10,24 @@ router.post(
   "/",
   upload.fields([
     { name: "originalImage", maxCount: 1 },
-    { name: "styleImage", maxCount: 1 },
   ]),
   async (req: Request, res: Response) => {
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const originalFile = files?.originalImage?.[0];
-      const styleFile = files?.styleImage?.[0];
+      const stylePrompt = req.body.stylePrompt;
 
-      if (!originalFile || !styleFile) {
-        res.status(400).json({ error: "Both original and style reference images are required" });
+      if (!originalFile) {
+        res.status(400).json({ error: "Original image is required" });
+        return;
+      }
+      if (!stylePrompt) {
+        res.status(400).json({ error: "Style prompt is required. Analyze style first." });
         return;
       }
 
       const fixMode = req.body.fixMode === "true";
       const strength = req.body.strength ? parseFloat(req.body.strength) : undefined;
-
-      // Analyze style from reference image
-      const styleBase64 = styleFile.buffer.toString("base64");
-      const styleAnalysis = await analyzeStyle(styleBase64, styleFile.mimetype);
 
       // Describe content from original image
       const originalBase64 = originalFile.buffer.toString("base64");
@@ -36,7 +35,7 @@ router.post(
 
       // Generate image
       const imageUrl = await generateImage({
-        stylePrompt: styleAnalysis.stylePrompt,
+        stylePrompt,
         contentDescription,
         imageBase64: originalBase64,
         mediaType: originalFile.mimetype,
@@ -46,13 +45,12 @@ router.post(
 
       res.json({
         imageUrl,
-        stylePromptUsed: styleAnalysis.stylePrompt,
+        stylePromptUsed: stylePrompt,
         contentDescription,
-        styleBreakdown: styleAnalysis.breakdown,
       });
-    } catch (error) {
-      console.error("Generation error:", error);
-      res.status(500).json({ error: "Image generation failed" });
+    } catch (error: any) {
+      console.error("Generation error:", error?.message || error);
+      res.status(500).json({ error: "Image generation failed", detail: error?.message });
     }
   }
 );

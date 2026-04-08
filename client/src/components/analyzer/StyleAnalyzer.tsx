@@ -1,24 +1,30 @@
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ArrowRight } from "lucide-react";
 import ImageDropzone from "../shared/ImageDropzone";
 import CopyButton from "../shared/CopyButton";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import { analyzeStyle } from "../../services/api";
 import type { AnalysisResult } from "../../types";
 
-export default function StyleAnalyzer() {
-  const [image, setImage] = useState<File | null>(null);
+interface Props {
+  onStyleAnalyzed: (result: AnalysisResult) => void;
+  onGoToUnifier: () => void;
+}
+
+export default function StyleAnalyzer({ onStyleAnalyzed, onGoToUnifier }: Props) {
+  const [images, setImages] = useState<File[]>([]);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
-    if (!image) return;
+    if (images.length === 0) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await analyzeStyle(image);
+      const data = await analyzeStyle(images);
       setResult(data);
+      onStyleAnalyzed(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
@@ -31,28 +37,29 @@ export default function StyleAnalyzer() {
       <div>
         <h2 className="text-xl font-semibold text-surface-800">Style Analyzer</h2>
         <p className="mt-1 text-sm text-surface-500">
-          Upload an image to extract its rendering style as a prompt
+          Upload images to extract their common rendering style as a prompt
         </p>
       </div>
 
       <ImageDropzone
-        label="Upload image to analyze"
-        onImageSelect={setImage}
-        currentImage={image}
+        multiple
+        label="Upload images to analyze"
+        onImagesSelect={setImages}
+        currentImages={images}
         onClear={() => {
-          setImage(null);
+          setImages([]);
           setResult(null);
         }}
       />
 
       <button
         onClick={handleAnalyze}
-        disabled={!image || loading}
+        disabled={images.length === 0 || loading}
         className="w-full rounded-xl bg-primary-500 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <span className="inline-flex items-center gap-2">
           <Sparkles size={16} />
-          Analyze Style
+          Analyze Style{images.length > 1 ? ` (${images.length} images)` : ""}
         </span>
       </button>
 
@@ -86,6 +93,16 @@ export default function StyleAnalyzer() {
               </div>
             ))}
           </div>
+
+          <button
+            onClick={onGoToUnifier}
+            className="w-full rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm font-semibold text-primary-600 transition-all hover:bg-primary-100 active:scale-[0.98]"
+          >
+            <span className="inline-flex items-center gap-2">
+              Use this style in Style Unifier
+              <ArrowRight size={16} />
+            </span>
+          </button>
         </div>
       )}
     </div>
