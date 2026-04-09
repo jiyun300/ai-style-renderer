@@ -1,10 +1,18 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
-import { describeContent } from "../services/claude.js";
+import sharp from "sharp";
 import { generateImage } from "../services/replicate.js";
 
 const router = Router();
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
+
+async function normalizeImage(buffer: Buffer): Promise<{ base64: string; mediaType: string }> {
+  const resized = await sharp(buffer)
+    .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+  return { base64: resized.toString("base64"), mediaType: "image/jpeg" };
+}
 
 router.post(
   "/",
@@ -29,16 +37,15 @@ router.post(
       const fixMode = req.body.fixMode === "true";
       const strength = req.body.strength ? parseFloat(req.body.strength) : undefined;
 
-      // Describe content from original image
-      const originalBase64 = originalFile.buffer.toString("base64");
-      const contentDescription = await describeContent(originalBase64, originalFile.mimetype);
+      // Normalize original image (resize + JPEG re-encode)
+      const normalized = await normalizeImage(originalFile.buffer);
 
-      // Generate image
+      // Generate styled image (preserves composition, only changes art style)
       const imageUrl = await generateImage({
         stylePrompt,
-        contentDescription,
-        imageBase64: originalBase64,
-        mediaType: originalFile.mimetype,
+        contentDescription: "",
+        imageBase64: normalized.base64,
+        mediaType: normalized.mediaType,
         fixMode,
         strength,
       });
@@ -46,7 +53,6 @@ router.post(
       res.json({
         imageUrl,
         stylePromptUsed: stylePrompt,
-        contentDescription,
       });
     } catch (error: any) {
       console.error("Generation error:", error?.message || error);

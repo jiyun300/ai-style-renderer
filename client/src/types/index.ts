@@ -1,3 +1,5 @@
+export type Provider = "gemini" | "claude";
+
 export interface StyleBreakdown {
   renderingTechnique: string;
   colorPalette: string;
@@ -10,10 +12,10 @@ export interface StyleBreakdown {
 export interface AnalysisResult {
   stylePrompt: string;
   breakdown: StyleBreakdown;
+  provider?: Provider;
 }
 
 export interface GenerationResult {
   imageUrl: string;
   stylePromptUsed: string;
-  contentDescription: string;
 }

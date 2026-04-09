@@ -4,7 +4,8 @@ import ImageDropzone from "../shared/ImageDropzone";
 import CopyButton from "../shared/CopyButton";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import { analyzeStyle } from "../../services/api";
-import type { AnalysisResult } from "../../types";
+import type { AnalysisResult, Provider } from "../../types";
+import clsx from "clsx";
 
 interface Props {
   onStyleAnalyzed: (result: AnalysisResult) => void;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function StyleAnalyzer({ onStyleAnalyzed, onGoToUnifier }: Props) {
   const [images, setImages] = useState<File[]>([]);
+  const [provider, setProvider] = useState<Provider>("gemini");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export default function StyleAnalyzer({ onStyleAnalyzed, onGoToUnifier }: Props)
     setLoading(true);
     setError(null);
     try {
-      const data = await analyzeStyle(images);
+      const data = await analyzeStyle(images, provider);
       setResult(data);
       onStyleAnalyzed(data);
     } catch (err) {
@@ -51,6 +53,34 @@ export default function StyleAnalyzer({ onStyleAnalyzed, onGoToUnifier }: Props)
           setResult(null);
         }}
       />
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-surface-500">AI Provider</p>
+        <div className="inline-flex w-full rounded-xl bg-surface-100 p-1">
+          <button
+            onClick={() => setProvider("gemini")}
+            className={clsx(
+              "flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+              provider === "gemini"
+                ? "bg-white text-surface-800 shadow-sm"
+                : "text-surface-500 hover:text-surface-700"
+            )}
+          >
+            Gemini
+          </button>
+          <button
+            onClick={() => setProvider("claude")}
+            className={clsx(
+              "flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+              provider === "claude"
+                ? "bg-white text-surface-800 shadow-sm"
+                : "text-surface-500 hover:text-surface-700"
+            )}
+          >
+            Claude
+          </button>
+        </div>
+      </div>
 
       <button
         onClick={handleAnalyze}

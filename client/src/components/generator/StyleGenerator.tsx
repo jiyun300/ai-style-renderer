@@ -36,7 +36,8 @@ export default function StyleGenerator({ analysisResult }: Props) {
           originalImages[i],
           analysisResult.stylePrompt,
           fixMode,
-          fixMode ? undefined : strength
+          fixMode ? undefined : strength,
+          analysisResult.provider
         );
         newResults.push(data);
         setResults([...newResults]);
@@ -48,6 +49,17 @@ export default function StyleGenerator({ analysisResult }: Props) {
     }
 
     setLoading(false);
+  };
+
+  const handleDownloadAll = () => {
+    results.forEach((r, i) => {
+      const a = document.createElement("a");
+      a.href = r.imageUrl;
+      a.download = `styled-${i + 1}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
   };
 
   return (
@@ -136,9 +148,20 @@ export default function StyleGenerator({ analysisResult }: Props) {
 
       {results.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-surface-700">
-            Results ({results.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-surface-700">
+              Results ({results.length})
+            </h3>
+            {results.length > 1 && (
+              <button
+                onClick={handleDownloadAll}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-600 transition-all hover:bg-primary-100 active:scale-[0.98]"
+              >
+                <Download size={14} />
+                Download all
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {results.map((r, i) => (
               <div

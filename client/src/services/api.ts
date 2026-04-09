@@ -1,9 +1,13 @@
-import type { AnalysisResult, GenerationResult } from "../types";
+import type { AnalysisResult, GenerationResult, Provider } from "../types";
 
-export async function analyzeStyle(imageFiles: File | File[]): Promise<AnalysisResult> {
+export async function analyzeStyle(
+  imageFiles: File | File[],
+  provider: Provider = "gemini"
+): Promise<AnalysisResult> {
   const formData = new FormData();
   const files = Array.isArray(imageFiles) ? imageFiles : [imageFiles];
   files.forEach((file) => formData.append("images", file));
+  formData.append("provider", provider);
 
   const res = await fetch("/api/analyze", {
     method: "POST",
@@ -22,12 +26,14 @@ export async function generateStyledImage(
   originalImage: File,
   stylePrompt: string,
   fixMode: boolean,
-  strength?: number
+  strength?: number,
+  provider: Provider = "gemini"
 ): Promise<GenerationResult> {
   const formData = new FormData();
   formData.append("originalImage", originalImage);
   formData.append("stylePrompt", stylePrompt);
   formData.append("fixMode", String(fixMode));
+  formData.append("provider", provider);
   if (strength !== undefined) formData.append("strength", String(strength));
 
   const res = await fetch("/api/generate", {

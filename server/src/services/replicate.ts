@@ -1,10 +1,9 @@
-import { InferenceClient } from "@huggingface/inference";
+// Image style transfer via Gemini Image Generation (Nano Banana)
+// Preserves original image composition/content while changing only the rendering style.
 
-let client: InferenceClient;
-function getClient() {
-  if (!client) client = new InferenceClient(process.env.HF_API_TOKEN);
-  return client;
-}
+const AI_PROXY_BASE_URL = process.env.AI_PROXY_BASE_URL!;
+const AI_PROXY_TOKEN = process.env.AI_PROXY_PERSONAL_TOKEN!;
+const IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 
 interface GenerateOptions {
   stylePrompt: string;
@@ -16,28 +15,45 @@ interface GenerateOptions {
 }
 
 export async function generateImage(options: GenerateOptions): Promise<string> {
-  const { stylePrompt, contentDescription } = options;
+  const { stylePrompt, imageBase64, mediaType } = options;
 
-  // 콘텐츠 묘사 + 스타일 프롬프트를 결합하되, 콘텐츠를 우선
-  const fullPrompt = `${contentDescription}, rendered in ${stylePrompt}`;
+  const instruction = `Transform this image into the following art style: ${stylePrompt}. CRITICAL: Keep the exact same composition, subject, characters, poses, layout, and content. Only change the rendering and art style. Do not add, remove, or alter any visual element other than the artistic rendering.`;
 
-  const hf = getClient();
-
-  const result = await hf.textToImage({
-    model: "stabilityai/stable-diffusion-xl-base-1.0",
-    inputs: fullPrompt,
-    parameters: {
-      negative_prompt: "blurry, low quality, distorted, deformed, watermark, text, ugly, different composition, different layout, different content",
-      guidance_scale: 9,
-      num_inference_steps: 35,
+  const url = `${AI_PROXY_BASE_URL}/google/v1beta/models/${IMAGE_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${AI_PROXY_TOKEN}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { inline_data: { data: imageBase64, mime_type: mediaType } },
+            { text: instruction },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+      },
+    }),
   });
 
-  if (typeof result === "string") {
-    return result;
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini Image API error ${res.status}: ${errText}`);
   }
-  const blob = result as Blob;
-  const arrayBuffer = await blob.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  return `data:image/png;base64,${base64}`;
+
+  const data: any = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  for (const p of parts) {
+    const inline = p.inline_data || p.inlineData;
+    if (inline?.data) {
+      const mime = inline.mime_type || inline.mimeType || "image/png";
+      return `data:${mime};base64,${inline.data}`;
+    }
+  }
+  throw new Error("Gemini Image API returned no image");
 }
